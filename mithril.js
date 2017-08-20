@@ -832,7 +832,7 @@ var coreRenderer = function($window) {
 		if (nsLastIndex > -1 && key2.substr(0, nsLastIndex) === "xlink") {
 			element.setAttributeNS("http://www.w3.org/1999/xlink", key2.slice(nsLastIndex + 1), value)
 		}
-		else if (key2[0] === "o" && key2[1] === "n" && typeof value === "function") updateEvent(vnode, key2, value)
+		else if (key2[0] === "o" && key2[1] === "n" && isEventListener(value)) updateEvent(vnode, key2, value)
 		else if (key2 === "style") updateStyle(element, old, value)
 		else if (key2 in element && !isAttribute(key2) && ns === undefined && !isCustomElement(vnode)) {
 			if (key2 === "value") {
@@ -903,6 +903,10 @@ var coreRenderer = function($window) {
 	function hasIntegrationMethods(source) {
 		return source != null && (source.oncreate || source.onupdate || source.onbeforeremove || source.onremove)
 	}
+	/** Test if value can be used as an event listener */
+	function isEventListener(value) {
+		return typeof value === "function" || (value != null && typeof value === "object" && typeof value.handleEvent === "function")
+	}
 	//style
 	function updateStyle(element, old, style) {
 		if (old != null && style != null && typeof old === "object" && typeof style === "object" && style !== old) {
@@ -930,21 +934,27 @@ var coreRenderer = function($window) {
 	//event
 	function updateEvent(vnode, key2, value) {
 		var element = vnode.dom
-		var callback = typeof onevent !== "function" ? value : function(e) {
-			var result = value.call(element, e)
+		var valIsFunc = typeof value === "function"
+		var listener = typeof onevent !== "function" ? value : function(e) {
+			var result = valIsFunc ? value.call(element, e) : value.handleEvent(e)
 			onevent.call(element, e)
 			return result
 		}
-		if (key2 in element) element[key2] = typeof value === "function" ? callback : null
-		else {
-			var eventName = key2.slice(2)
-			if (vnode.events === undefined) vnode.events = {}
-			if (vnode.events[key2] === callback) return
-			if (vnode.events[key2] != null) element.removeEventListener(eventName, vnode.events[key2], false)
-			if (typeof value === "function") {
-				vnode.events[key2] = callback
-				element.addEventListener(eventName, vnode.events[key2], false)
-			}
+		var elemHasOnEvent = key2 in element
+		// Prefer legacy element.onevent setter when applicable (for performance)
+		if (elemHasOnEvent) element[key2] = valIsFunc ? listener : null
+		if (vnode.events === undefined) {
+			// No previous events to remove - if we set element.onevent we're done
+			if (elemHasOnEvent && (value == null || valIsFunc)) return
+			vnode.events = {}
+		}
+		if (vnode.events[key2] === listener) return
+		var eventName = key2.slice(2)
+		if (vnode.events[key2] != null) element.removeEventListener(eventName, vnode.events[key2], false)
+		// Only use addEventListener if we couldn't use element.onevent above
+		if (value != null && (!elemHasOnEvent || typeof value === "object")) {
+			vnode.events[key2] = listener
+			element.addEventListener(eventName, vnode.events[key2], false)
 		}
 	}
 	//lifecycle
@@ -1084,12 +1094,12 @@ var coreRouter = function($window) {
 		return data
 	}
 	var asyncId
-	function debounceAsync(callback0) {
+	function debounceAsync(callback) {
 		return function() {
 			if (asyncId != null) return
 			asyncId = callAsync0(function() {
 				asyncId = null
-				callback0()
+				callback()
 			})
 		}
 	}
@@ -1236,9 +1246,9 @@ var _20 = function($window, redrawService0) {
 	return route
 }
 m.route = _20(window, redrawService)
-m.withAttr = function(attrName, callback1, context) {
+m.withAttr = function(attrName, callback, context) {
 	return function(e) {
-		callback1.call(context || this, attrName in e.currentTarget ? e.currentTarget[attrName] : e.currentTarget.getAttribute(attrName))
+		callback.call(context || this, attrName in e.currentTarget ? e.currentTarget[attrName] : e.currentTarget.getAttribute(attrName))
 	}
 }
 var _28 = coreRenderer(window)
