@@ -756,9 +756,9 @@ module.exports = function($window) {
 		// Filter out namespaced keys
 		return ns === undefined && (
 			// If it's a custom element, just keep it.
-			vnode.tag.indexOf("-") > -1 || vnode.attrs != null && vnode.attrs.is ||
+			vnode.tag.indexOf("-") > -1 || vnode.attrs != null && vnode.attrs.is
 			// If it's a normal element, let's try to avoid a few browser bugs.
-			key !== "href" && key !== "list" && key !== "form" && key !== "width" && key !== "height"// && key !== "type"
+			|| key !== "href" && key !== "list" && key !== "form" && key !== "width" && key !== "height"// && key !== "type"
 			// Defer the property check until *after* we check everything.
 		) && key in vnode.dom
 	}
