@@ -16,6 +16,10 @@ module.exports = function($window) {
 	}
 
 	var asyncId
+	/** popstate event listener (if popstate supported) */
+	var onPopState
+	/** hashchange event listener (IE fallback) */
+	var onHashChange
 	var router = {prefix: "#!"}
 	router.getPath = function() {
 		if (router.prefix.charAt(0) === "#") return normalize("hash").slice(router.prefix.length)
@@ -73,16 +77,27 @@ module.exports = function($window) {
 		}
 
 		if (supportsPushState) {
-			$window.onpopstate = function() {
+			onPopState = function() {
 				if (asyncId) return
 				asyncId = callAsync(function() {
 					asyncId = null
 					resolveRoute()
 				})
 			}
+			$window.addEventListener("popstate", onPopState)
+		} else if (router.prefix.charAt(0) === "#") {
+			onHashChange = resolveRoute
+			$window.addEventListener("hashchange", onHashChange)
 		}
-		else if (router.prefix.charAt(0) === "#") $window.onhashchange = resolveRoute
 		resolveRoute()
+	}
+
+	router.destroy = function() {
+		if (supportsPushState) {
+			$window.removeEventListener("popstate", onPopState)
+		} else {
+			$window.removeEventListener("hashchange", onHashChange)
+		}
 	}
 
 	return router
